@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { syncUser } from "@/lib/syncUser";
+
 
 export default async function Home() {
   const user = await syncUser();
@@ -17,14 +17,7 @@ export default async function Home() {
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">
-      <nav className="flex items-center justify-between px-8 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 bg-black dark:bg-white rounded-lg flex items-center justify-center">
-            <span className="text-white dark:text-black font-bold text-xl">K</span>
-          </div>
-          <span className="font-semibold text-xl tracking-tight">KiranaBot</span>
-        </div>
-      </nav>
+  
 
       <main className="flex-1 flex items-center justify-center p-6">
         <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
@@ -57,7 +50,7 @@ export default async function Home() {
                   </li>
                   <li className="flex gap-3">
                     <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xs font-bold">3</span>
-                    <span>Boom! You're ready to record transactions</span>
+                    <span>Boom! You&apos;re ready to record transactions</span>
                   </li>
                 </ul>
               </div>
@@ -91,7 +84,7 @@ export default async function Home() {
               <div className="space-y-6">
                 <div className="flex flex-col items-end gap-1">
                   <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl rounded-tr-none text-sm shadow-sm">
-                    "Maggie sale ₹20"
+                    &quot;Maggie sale ₹20&quot;
                   </div>
                   <span className="text-[10px] text-zinc-400">12:45 PM</span>
                 </div>
@@ -105,7 +98,7 @@ export default async function Home() {
                 </div>
                 <div className="flex flex-col items-end gap-1 pt-2">
                   <div className="bg-blue-600 text-white px-5 py-3 rounded-2xl rounded-tr-none text-sm shadow-sm">
-                    "Total sale aaj ki"
+                    &quot;Total sale aaj ki&quot;
                   </div>
                   <span className="text-[10px] text-zinc-400">01:10 PM</span>
                 </div>

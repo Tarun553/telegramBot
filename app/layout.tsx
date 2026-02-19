@@ -34,7 +34,15 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-            <header className="flex justify-end items-center p-4 gap-4 h-16">
+            <header className="flex justify-between items-center p-4 gap-4 h-16">
+              <nav className="flex items-center justify-between px-8 py-4 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-black">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 bg-black dark:bg-white rounded-lg flex items-center justify-center">
+            <span className="text-white dark:text-black font-bold text-xl">K</span>
+          </div>
+          <span className="font-semibold text-xl tracking-tight">KiranaBot</span>
+        </div>
+      </nav>
               {/* Show the sign-in and sign-up buttons when the user is signed out */}
               <SignedOut>
                 <SignInButton />

@@ -15,7 +15,7 @@ export interface IntentData {
 
 const bookkeepingFunctionDeclaration = {
     name: "record_bookkeeping_intent",
-    description: "Extract bookkeeping intent and data from shopkeeper messages",
+    description: "Extract bookkeeping intent and data from shopkeeper messages or voice notes",
     parameters: {
         type: Type.OBJECT,
         properties: {
@@ -61,16 +61,32 @@ const bookkeepingFunctionDeclaration = {
     },
 };
 
-export async function parseIntent(message: string): Promise<IntentData> {
+export async function parseIntent(message: string, audio?: { data: string; mimeType: string }): Promise<IntentData> {
     const today = new Date().toISOString().split("T")[0];
+
+    const contents: (string | { inlineData: { data: string; mimeType: string } })[] = [
+        `You are an AI accounting assistant for Indian shopkeepers. 
+Understand Hindi, Hinglish, or English messages (text or voice) and extract the intent.
+Today's date is ${today}.`
+    ];
+
+    if (message) {
+        contents.push(`User Message: "${message}"`);
+    }
+
+    if (audio) {
+        contents.push({
+            inlineData: {
+                data: audio.data,
+                mimeType: audio.mimeType
+            }
+        });
+    }
 
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: `You are an AI accounting assistant for Indian shopkeepers. 
-Understand Hindi, Hinglish, or English messages and extract the intent.
-Today's date is ${today}.
-Message: "${message}"`,
+            contents: contents,
             config: {
                 tools: [{
                     functionDeclarations: [bookkeepingFunctionDeclaration]
@@ -80,21 +96,29 @@ Message: "${message}"`,
 
         if (response.functionCalls && response.functionCalls.length > 0) {
             const call = response.functionCalls[0];
-            const args: any = call.args;
+            const args = call.args as Record<string, unknown>;
 
             // Map total to amount if needed for compatibility
             if (args.total) {
-                args.amount = args.total;
+                args.amount = args.total as number;
+            } else if (args.amount) {
+                args.total = args.amount as number;
             }
 
-            return args as IntentData;
+            return args as unknown as IntentData;
         }
 
-        // Fallback if no function call was generated
-        console.warn("No function call generated, attempting legacy parse if text is JSON");
+        // Fallback or if no function call was generated
         const text = response.text?.trim() ?? "";
-        const cleanedText = text.replace(/```json|```/g, "").trim();
-        return JSON.parse(cleanedText);
+        if (text) {
+            try {
+                const cleanedText = text.replace(/```json|```/g, "").trim();
+                return JSON.parse(cleanedText);
+            } catch {
+                console.warn("Gemini returned text instead of function call:", text);
+            }
+        }
+        throw new Error("Could not understand the message.");
 
     } catch (error) {
         console.error("Intent parsing error:", error);

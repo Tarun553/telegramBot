@@ -1,5 +1,7 @@
 import { prisma } from "./prisma";
+import { IntentData } from "./intent-parser";
 import { TransactionType } from "../generated/prisma/client";
+
 
 // Type-safe transaction type mapping
 const intentToType: Record<string, TransactionType> = {
@@ -8,7 +10,7 @@ const intentToType: Record<string, TransactionType> = {
   "create_payment": TransactionType.PAYMENT,
 };
 
-export async function saveTransaction(userId: string, data: any) {
+export async function saveTransaction(userId: string, data: IntentData) {
   // Validate required fields based on intent
   if (!data.intent || !intentToType[data.intent]) {
     throw new Error("Invalid transaction type");
@@ -66,6 +68,8 @@ export async function getWeekSummary(userId: string) {
   const weekAgo = new Date(today);
   weekAgo.setDate(weekAgo.getDate() - 7);
   weekAgo.setHours(0, 0, 0, 0);
+
+  // Removed unused variable: const botUsername = "Karanaji_bot";
 
   const stats = await prisma.transaction.groupBy({
     by: ["type"],

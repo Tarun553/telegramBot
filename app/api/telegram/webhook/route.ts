@@ -14,27 +14,52 @@ export async function POST(req: NextRequest) {
         console.log("Telegram Webhook Body:", JSON.stringify(body, null, 2));
 
         const message = body.message;
-        if (!message || !message.text) {
+        if (!message) return NextResponse.json({ ok: true });
+
+        const chatId = message.chat.id.toString();
+        const text = message.text || message.caption || "";
+        let audioData: { data: string; mimeType: string } | undefined;
+
+        // Handle Voice/Audio
+        const voice = message.voice || message.audio;
+        if (voice) {
+            try {
+                // 1. Get file path from Telegram
+                const fileResponse = await axios.get(`${TELEGRAM_API}/getFile?file_id=${voice.file_id}`);
+                const filePath = fileResponse.data.result.file_path;
+
+                // 2. Download file
+                const downloadUrl = `https://api.telegram.org/file/bot${TELEGRAM_TOKEN}/${filePath}`;
+                const audioResponse = await axios.get(downloadUrl, { responseType: 'arraybuffer' });
+
+                // 3. Convert to base64
+                audioData = {
+                    data: Buffer.from(audioResponse.data).toString('base64'),
+                    mimeType: voice.mime_type || 'audio/ogg'
+                };
+            } catch (error) {
+                console.error("Error downloading voice message:", error);
+                await sendTelegramMessage(chatId, "Maafi chahta hoon, voice message download nahi ho paya. Kripya fir se try karein.");
+                return NextResponse.json({ ok: true });
+            }
+        }
+
+        if (!text && !audioData) {
             return NextResponse.json({ ok: true });
         }
 
-        const chatId = message.chat.id.toString();
-        const text = message.text;
-
         // 1. Find or deep-link user
-        let user: any = null;
+        let user: { id: string, telegramId: string | null, clerkId: string } | null = null;
 
-        // Try Redis first - Wrap in try-catch for safety
+        // Try Redis first
         if (redis) {
             try {
                 const cachedUser = await redis.get(`user:tg:${chatId}`);
                 if (cachedUser) {
                     user = typeof cachedUser === "string" ? JSON.parse(cachedUser) : cachedUser;
-                    console.log("[Redis] User found in cache:", chatId);
                 }
             } catch (redisError) {
                 console.error("[Redis] Get error:", (redisError as Error).message);
-                // Continue to DB fallback
             }
         }
 
@@ -67,10 +92,11 @@ export async function POST(req: NextRequest) {
                             console.error("[Redis] Link set error:", (redisSetError as Error).message);
                         }
                     }
-                    await sendTelegramMessage(chatId, "Welcome! Your Telegram account is now linked to your shop dashboard. You can start recording transactions now.");
-                } catch (e) {
+                    await sendTelegramMessage(chatId, "Welcome! Your Telegram account is now linked. You can start recording transactions now via text or voice.");
+                } catch {
                     await sendTelegramMessage(chatId, "Sorry, I couldn't find your account. Please click the link from your dashboard again.");
                 }
+
                 return NextResponse.json({ ok: true });
             }
 
@@ -81,8 +107,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true });
         }
 
-        // 2. Parse Intent
-        const intentData = await parseIntent(text);
+        // 2. Parse Intent (Multimodal)
+        const intentData = await parseIntent(text, audioData);
         console.log("Parsed Intent:", intentData);
 
         // 3. Process Intent
@@ -134,11 +160,14 @@ export async function POST(req: NextRequest) {
         await sendTelegramMessage(chatId, responseText);
         return NextResponse.json({ ok: true });
 
-    } catch (error: any) {
-        console.error("Webhook Error:", error);
-        return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    } catch (error) {
+        const err = error as Error;
+        console.error("Webhook Error:", err);
+        return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
     }
 }
+
+
 
 async function sendTelegramMessage(chatId: string, text: string) {
     try {
