@@ -17,6 +17,7 @@
     "@prisma/adapter-pg": "^7.4.0",
     "@prisma/client": "^7.4.0",
     "@types/node-telegram-bot-api": "^0.64.13",
+    "@upstash/redis": "^1.36.2",
     "axios": "^1.13.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

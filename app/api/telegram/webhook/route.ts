@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { redis } from "@/lib/redis";
 import { parseIntent } from "@/lib/intent-parser";
 import { saveTransaction, getTodaySales, getPersonCredit, getWeekSummary, getSalesByDate } from "@/lib/transcations";
 import axios from "axios";
@@ -21,9 +22,34 @@ export async function POST(req: NextRequest) {
         const text = message.text;
 
         // 1. Find or deep-link user
-        let user = await prisma.user.findUnique({
-            where: { telegramId: chatId },
-        });
+        let user: any = null;
+
+        // Try Redis first - Wrap in try-catch for safety
+        if (redis) {
+            try {
+                const cachedUser = await redis.get(`user:tg:${chatId}`);
+                if (cachedUser) {
+                    user = typeof cachedUser === "string" ? JSON.parse(cachedUser) : cachedUser;
+                    console.log("[Redis] User found in cache:", chatId);
+                }
+            } catch (redisError) {
+                console.error("[Redis] Get error:", (redisError as Error).message);
+                // Continue to DB fallback
+            }
+        }
+
+        if (!user) {
+            user = await prisma.user.findUnique({
+                where: { telegramId: chatId },
+            });
+            if (user && redis) {
+                try {
+                    await redis.set(`user:tg:${chatId}`, JSON.stringify(user), { ex: 3600 });
+                } catch (redisSetError) {
+                    console.error("[Redis] Set error:", (redisSetError as Error).message);
+                }
+            }
+        }
 
         if (!user) {
             // Check for deep link /start <userId>
@@ -34,6 +60,13 @@ export async function POST(req: NextRequest) {
                         where: { clerkId: clerkUserId },
                         data: { telegramId: chatId },
                     });
+                    if (redis) {
+                        try {
+                            await redis.set(`user:tg:${chatId}`, JSON.stringify(user), { ex: 3600 });
+                        } catch (redisSetError) {
+                            console.error("[Redis] Link set error:", (redisSetError as Error).message);
+                        }
+                    }
                     await sendTelegramMessage(chatId, "Welcome! Your Telegram account is now linked to your shop dashboard. You can start recording transactions now.");
                 } catch (e) {
                     await sendTelegramMessage(chatId, "Sorry, I couldn't find your account. Please click the link from your dashboard again.");
