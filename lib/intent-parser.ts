@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
@@ -13,74 +13,89 @@ export interface IntentData {
     date?: string;
 }
 
-const VALID_INTENTS = [
-    "create_sale",
-    "create_credit",
-    "create_payment",
-    "get_today_sales",
-    "get_person_credit",
-    "get_week_summary",
-    "get_total_sales_by_date",
-];
+const bookkeepingFunctionDeclaration = {
+    name: "record_bookkeeping_intent",
+    description: "Extract bookkeeping intent and data from shopkeeper messages",
+    parameters: {
+        type: Type.OBJECT,
+        properties: {
+            intent: {
+                type: Type.STRING,
+                description: "The action to perform",
+                enum: [
+                    "create_sale",
+                    "create_credit",
+                    "create_payment",
+                    "get_today_sales",
+                    "get_person_credit",
+                    "get_week_summary",
+                    "get_total_sales_by_date"
+                ],
+            },
+            item: {
+                type: Type.STRING,
+                description: "Name of the item sold (for sales)",
+            },
+            qty: {
+                type: Type.NUMBER,
+                description: "Quantity of the item",
+            },
+            price: {
+                type: Type.NUMBER,
+                description: "Price per unit",
+            },
+            total: {
+                type: Type.NUMBER,
+                description: "Total amount for the transaction (sale, credit, or payment)",
+            },
+            person: {
+                type: Type.STRING,
+                description: "Name of the person for credit or payment",
+            },
+            date: {
+                type: Type.STRING,
+                description: "Date of the transaction (YYYY-MM-DD)",
+            }
+        },
+        required: ["intent"],
+    },
+};
 
 export async function parseIntent(message: string): Promise<IntentData> {
-    // Get today's date in ISO format for the prompt
     const today = new Date().toISOString().split("T")[0];
-
-    const prompt = `
-You are an AI accounting assistant for Indian shopkeepers.
-
-Understand Hindi, Hinglish, or English message and return ONLY valid JSON.
-
-Possible intents:
-- create_sale (for sales transactions)
-- create_credit (for giving credit/udhar to someone)
-- create_payment (for receiving payment from someone who had udhar)
-- get_today_sales (query today's total sales)
-- get_person_credit (query how much someone owes)
-- get_week_summary (query weekly summary)
-- get_total_sales_by_date (query sales for a specific date)
-
-Rules:
-1. Always return strict JSON with no additional text
-2. Use "${today}" as today's date if not provided
-3. Map transaction types correctly:
-   - "udhar", "credit given" → create_credit
-   - "payment received", "diya", "diye" → create_payment
-   - "biki", "sale", "becha" → create_sale
-4. Extract person name for credit/payment queries
-5. For queries like "kitna hai", "kaisa", "summary" → use appropriate READ intent
-
-Response must be valid JSON. Example responses:
-
-{"intent": "create_sale", "item": "maggie", "qty": 12, "price": 20, "total": 240, "date": "${today}"}
-{"intent": "get_person_credit", "person": "Ramesh"}
-{"intent": "get_today_sales"}
-{"intent": "get_week_summary"}
-
-Now parse this message:
-"${message}"
-`;
 
     try {
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: prompt,
+            contents: `You are an AI accounting assistant for Indian shopkeepers. 
+Understand Hindi, Hinglish, or English messages and extract the intent.
+Today's date is ${today}.
+Message: "${message}"`,
+            config: {
+                tools: [{
+                    functionDeclarations: [bookkeepingFunctionDeclaration]
+                }],
+            },
         });
 
-        const text = response.text?.trim() ?? "";
+        if (response.functionCalls && response.functionCalls.length > 0) {
+            const call = response.functionCalls[0];
+            const args: any = call.args;
 
-        // Clean up the response - sometimes Gemini adds markdown code blocks
-        const cleanedText = text.replace(/```json|```/g, "").trim();
+            // Map total to amount if needed for compatibility
+            if (args.total) {
+                args.amount = args.total;
+            }
 
-        const parsed = JSON.parse(cleanedText);
-
-        // Validate intent
-        if (!VALID_INTENTS.includes(parsed.intent)) {
-            throw new Error(`Invalid intent: ${parsed.intent}`);
+            return args as IntentData;
         }
 
-        return parsed as IntentData;
+        // Fallback if no function call was generated
+        console.warn("No function call generated, attempting legacy parse if text is JSON");
+        const text = response.text?.trim() ?? "";
+        const cleanedText = text.replace(/```json|```/g, "").trim();
+        return JSON.parse(cleanedText);
+
     } catch (error) {
         console.error("Intent parsing error:", error);
         throw new Error("Could not understand the message. Please try again.");

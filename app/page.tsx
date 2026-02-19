@@ -12,7 +12,8 @@ export default async function Home() {
     );
   }
 
-  const botUsername = "Kirana_Accounting_Bot";
+  const botUsername = "Karanaji_bot";
+
 
   return (
     <div className="flex min-h-screen flex-col bg-zinc-50 font-sans dark:bg-black">

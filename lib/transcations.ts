@@ -49,17 +49,16 @@ export async function getTodaySales(userId: string) {
 }
 
 export async function getPersonCredit(userId: string, person: string) {
-  const credits = await prisma.transaction.aggregate({
-    where: { userId, type: "CREDIT", personName: person },
+  const result = await prisma.transaction.groupBy({
+    by: ["type"],
+    where: { userId, personName: person, type: { in: [TransactionType.CREDIT, TransactionType.PAYMENT] } },
     _sum: { amount: true },
   });
 
-  const payments = await prisma.transaction.aggregate({
-    where: { userId, type: "PAYMENT", personName: person },
-    _sum: { amount: true },
-  });
+  const credits = result.find(r => r.type === TransactionType.CREDIT)?._sum.amount ?? 0;
+  const payments = result.find(r => r.type === TransactionType.PAYMENT)?._sum.amount ?? 0;
 
-  return (credits._sum.amount ?? 0) - (payments._sum.amount ?? 0);
+  return credits - payments;
 }
 
 export async function getWeekSummary(userId: string) {
@@ -68,29 +67,23 @@ export async function getWeekSummary(userId: string) {
   weekAgo.setDate(weekAgo.getDate() - 7);
   weekAgo.setHours(0, 0, 0, 0);
 
-  const sales = await prisma.transaction.aggregate({
+  const stats = await prisma.transaction.groupBy({
+    by: ["type"],
     where: {
       userId,
-      type: "SALE",
       createdAt: { gte: weekAgo },
     },
     _sum: { amount: true },
     _count: true,
   });
 
-  const credits = await prisma.transaction.aggregate({
-    where: {
-      userId,
-      type: "CREDIT",
-      createdAt: { gte: weekAgo },
-    },
-    _sum: { amount: true },
-  });
+  const sales = stats.find(s => s.type === TransactionType.SALE);
+  const credits = stats.find(s => s.type === TransactionType.CREDIT);
 
   return {
-    totalSales: sales._sum.amount ?? 0,
-    transactionCount: sales._count,
-    totalCredit: credits._sum.amount ?? 0,
+    totalSales: sales?._sum.amount ?? 0,
+    transactionCount: sales?._count ?? 0,
+    totalCredit: credits?._sum.amount ?? 0,
   };
 }
 
