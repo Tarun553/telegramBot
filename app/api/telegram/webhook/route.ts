@@ -20,9 +20,19 @@ Main aapki kaise madad karu?`;
 
 export async function POST(req: NextRequest) {
     try {
+        // Debug logging for secret token validation
+        const secretHeader = req.headers.get("x-telegram-bot-api-secret-token");
+        console.log("[Webhook] Secret token check:", {
+            hasEnvSecret: !!TELEGRAM_WEBHOOK_SECRET_TOKEN,
+            hasHeaderSecret: !!secretHeader,
+            secretsMatch: secretHeader === TELEGRAM_WEBHOOK_SECRET_TOKEN,
+            envSecretLength: TELEGRAM_WEBHOOK_SECRET_TOKEN?.length,
+            headerSecretLength: secretHeader?.length
+        });
+
         if (TELEGRAM_WEBHOOK_SECRET_TOKEN) {
-            const secretHeader = req.headers.get("x-telegram-bot-api-secret-token");
             if (secretHeader !== TELEGRAM_WEBHOOK_SECRET_TOKEN) {
+                console.log("[Webhook] Unauthorized: Secret token mismatch");
                 return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
             }
         }
