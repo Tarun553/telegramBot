@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { redis } from "@/lib/redis";
-import { parseIntent } from "@/lib/intent-parser";
+import { parseIntent, parseIntentFastPath } from "@/lib/intent-parser";
 import { saveTransaction, getTodaySales, getPersonCredit, getWeekSummary, getSalesByDate } from "@/lib/transcations";
 import axios from "axios";
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
+const HELP_MESSAGE = `Namaste! Main aapka AI accounting assistant hoon. Main aapke shop ke hisab-kitab me madad kar sakta hoon.
+
+Aap mujhe aise messages bhej sakte hain:
+• Bikri: "2kg chawal 100 me beche" ya "Aaj 500 ki sale hui"
+• Udhaar: "Rahul ne 200 ka udhaar liya"
+• Payment: "Amit ne 500 jama kiye"
+• Hisaab: "Aaj ki total sale kitni hai?" ya "Rahul ka kitna udhaar baki hai?"
+
+Main aapki kaise madad karu?`;
 
 export async function POST(req: NextRequest) {
     try {
@@ -107,8 +116,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true });
         }
 
-        // 2. Parse Intent (Multimodal)
-        const intentData = await parseIntent(text, audioData);
+        if (text.startsWith("/start")) {
+            await sendTelegramMessage(
+                chatId,
+                "Aapka account linked hai ✅\nAap sale, udhar, payment ya reports text/voice mein bhej sakte hain."
+            );
+            return NextResponse.json({ ok: true });
+        }
+
+        // 2. Parse Intent (Fast-path for text, Gemini fallback)
+        const fastPathIntent = !audioData ? parseIntentFastPath(text) : null;
+        const intentData = fastPathIntent ?? await parseIntent(text, audioData);
         console.log("Parsed Intent:", intentData);
 
         // 3. Process Intent
@@ -118,8 +136,41 @@ export async function POST(req: NextRequest) {
             case "create_sale":
             case "create_credit":
             case "create_payment":
-                const tx = await saveTransaction(user.id, intentData);
-                responseText = `Theek hai! ✅ ${intentData.intent.replace("create_", "")} record ho gayi hai.\n\nItem: ${tx.item || "General"}\nAmount: ₹${tx.amount}`;
+                if (intentData.intent === "create_sale") {
+                    const amount = intentData.total ?? intentData.amount;
+                    if (typeof amount !== "number" && typeof intentData.qty === "number" && typeof intentData.price === "number") {
+                        const computedTotal = intentData.qty * intentData.price;
+                        intentData.total = computedTotal;
+                        intentData.amount = computedTotal;
+                    }
+                }
+
+                if (intentData.intent === "create_payment") {
+                    const amount = intentData.total ?? intentData.amount;
+                    if (typeof amount !== "number") {
+                        if (!intentData.person) {
+                            responseText = "Payment record karne ke liye naam ya amount batayein. Jaise: Kunal ne 500 wapas diye.";
+                            break;
+                        }
+
+                        const pendingCredit = await getPersonCredit(user.id, intentData.person);
+                        if (pendingCredit <= 0) {
+                            responseText = `${intentData.person} ka koi baki udhar nahi hai.`;
+                            break;
+                        }
+
+                        intentData.total = pendingCredit;
+                        intentData.amount = pendingCredit;
+                    }
+                }
+
+                try {
+                    const tx = await saveTransaction(user.id, intentData);
+                    responseText = `Theek hai! ✅ ${intentData.intent.replace("create_", "")} record ho gayi hai.\n\nItem: ${tx.item || "General"}\nAmount: ₹${tx.amount}`;
+                } catch (txError) {
+                    console.error("Transaction save error:", txError);
+                    responseText = "Details thodi unclear hain. Kripya amount ke saath firse bhejein. Example: Kunal ne 500 wapas diye.";
+                }
                 break;
 
             case "get_today_sales":
@@ -153,8 +204,12 @@ export async function POST(req: NextRequest) {
                 responseText = `${date} ki sale ₹${salesByDate} hui hai.`;
                 break;
 
+            case "small_talk":
+                responseText = HELP_MESSAGE;
+                break;
+
             default:
-                responseText = "Samajh nahi aaya. Kripya dhang se batayein.";
+                responseText = HELP_MESSAGE;
         }
 
         await sendTelegramMessage(chatId, responseText);

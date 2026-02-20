@@ -13,6 +13,114 @@ export interface IntentData {
     date?: string;
 }
 
+function normalizeText(input: string) {
+    return input
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function extractAmount(text: string): number | undefined {
+    const match = text.match(/(?:₹|rs\.?|rupees?|inr)?\s*(\d+(?:\.\d+)?)/i);
+    if (!match) return undefined;
+    const amount = Number(match[1]);
+    return Number.isFinite(amount) ? amount : undefined;
+}
+
+function extractPerson(text: string): string | undefined {
+    const patterns = [
+        /([a-zA-Z\u0900-\u097F]+)\s+ne\b/i,
+        /([a-zA-Z\u0900-\u097F]+)\s+ko\b/i,
+        /([a-zA-Z\u0900-\u097F]+)\s+ka\s+udhar/i,
+        /from\s+([a-zA-Z\u0900-\u097F]+)/i,
+    ];
+
+    for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match?.[1]) {
+            return match[1].trim();
+        }
+    }
+
+    return undefined;
+}
+
+export function parseIntentFastPath(message: string): IntentData | null {
+    const text = normalizeText(message);
+    if (!text) return null;
+
+    if (
+        /^(hi|hey|hello|hii|helo|namaste|namaskar|yo|sup|good morning|good evening)\b/.test(text) ||
+        /\b(kya kar sakte ho|what can you do|help|madad|kaise madad|who are you|tum kaun ho)\b/.test(text)
+    ) {
+        return { intent: "small_talk" };
+    }
+
+    if (/\b(today|aaj)\b.*\b(sale|sales|bikri|becha|bechi)\b/.test(text)) {
+        return { intent: "get_today_sales" };
+    }
+
+    if (/\b(week|weekly|hafta|hafte)\b.*\b(summary|report|hisab|aankde)\b/.test(text)) {
+        return { intent: "get_week_summary" };
+    }
+
+    const person = extractPerson(message);
+    const amount = extractAmount(text);
+
+    if (/\b(sara|saara|poora|pura|full)\b.*\b(udhar|credit)\b.*\b(wapas|vapas|de diya|diya|payment)\b/.test(text)) {
+        return {
+            intent: "create_payment",
+            person,
+        };
+    }
+
+    if (/\b(udhar|credit)\b.*\b(kitna|kita|balance|baki|baaki)\b/.test(text) || /\bka\s+udhar\b/.test(text)) {
+        if (person) {
+            return {
+                intent: "get_person_credit",
+                person,
+            };
+        }
+    }
+
+    if (/\b(wapas|vapas|payment|jama|returned|return)\b/.test(text)) {
+        if (amount && amount > 0) {
+            return {
+                intent: "create_payment",
+                person,
+                amount,
+                total: amount,
+            };
+        }
+
+        if (person && /\b(udhar|credit)\b/.test(text)) {
+            return {
+                intent: "create_payment",
+                person,
+            };
+        }
+    }
+
+    if (/\b(udhar|credit)\b/.test(text) && amount && amount > 0) {
+        return {
+            intent: "create_credit",
+            person,
+            amount,
+            total: amount,
+        };
+    }
+
+    if (/\b(sold|sale|bika|becha|bechi|sold)\b/.test(text) && amount && amount > 0) {
+        return {
+            intent: "create_sale",
+            amount,
+            total: amount,
+        };
+    }
+
+    return null;
+}
+
 const bookkeepingFunctionDeclaration = {
     name: "record_bookkeeping_intent",
     description: "Extract bookkeeping intent and data from shopkeeper messages or voice notes",
@@ -85,7 +193,7 @@ Today's date is ${today}.`
 
     try {
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: contents,
             config: {
                 tools: [{
@@ -113,15 +221,16 @@ Today's date is ${today}.`
         if (text) {
             try {
                 const cleanedText = text.replace(/```json|```/g, "").trim();
-                return JSON.parse(cleanedText);
+                return JSON.parse(cleanedText) as IntentData;
             } catch {
                 console.warn("Gemini returned text instead of function call:", text);
+                return { intent: "unknown" };
             }
         }
-        throw new Error("Could not understand the message.");
+        return { intent: "unknown" };
 
     } catch (error) {
         console.error("Intent parsing error:", error);
-        throw new Error("Could not understand the message. Please try again.");
+        return { intent: "unknown" };
     }
 }
