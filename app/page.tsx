@@ -45,15 +45,15 @@ export default async function Home() {
                 <h3 className="font-semibold text-lg">Quick Setup:</h3>
                 <ul className="space-y-3 text-zinc-600 dark:text-zinc-400">
                   <li className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xs font-bold">1</span>
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xs font-bold">1</span>
                     <span>Click the <b>Connect</b> button below</span>
                   </li>
                   <li className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xs font-bold">2</span>
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xs font-bold">2</span>
                     <span>Tap on <b>Start</b> in Telegram</span>
                   </li>
                   <li className="flex gap-3">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xs font-bold">3</span>
+                    <span className="shrink-0 w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-xs font-bold">3</span>
                     <span>Boom! You&apos;re ready to record transactions</span>
                   </li>
                 </ul>
