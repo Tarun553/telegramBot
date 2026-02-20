@@ -44,6 +44,11 @@ CLERK_SECRET_KEY="your_clerk_secret_key"
 GEMINI_API_KEY="your_gemini_api_key"
 
 TELEGRAM_TOKEN="your_telegram_bot_token"
+TELEGRAM_WEBHOOK_SECRET_TOKEN="random_long_secret_for_telegram"
+WEBHOOK_SETUP_SECRET="random_long_secret_for_internal_setup"
+APP_URL="https://your-production-domain.com"
+# Optional: use this if webhook URL differs from APP_URL + /api/telegram/webhook
+# TELEGRAM_WEBHOOK_URL="https://your-production-domain.com/api/telegram/webhook"
 
 UPSTASH_REDIS_REST_URL="your_upstash_redis_url"
 UPSTASH_REDIS_REST_TOKEN="your_upstash_redis_token"
@@ -69,6 +74,21 @@ npm run dev
 ```
 
 The application will be available at `http://localhost:3000`.
+
+### 6. Telegram Webhook Automation (No GitHub/Vercel Hooks)
+
+Webhook registration is handled by app runtime code:
+
+- On server-side homepage requests, app checks current Telegram webhook.
+- If missing/wrong, app auto-calls Telegram `setWebhook`.
+
+Required env vars for this flow:
+
+- `TELEGRAM_TOKEN`
+- `APP_URL` (your production domain)
+- `TELEGRAM_WEBHOOK_SECRET_TOKEN` (recommended)
+
+You can still manually trigger setup using `POST /api/telegram/setup-webhook` when needed.
 
 ## 📁 Folder Structure
 

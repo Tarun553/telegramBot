@@ -1,7 +1,11 @@
 import { syncUser } from "@/lib/syncUser";
+import { ensureTelegramWebhook } from "@/lib/ensure-telegram-webhook";
+
+export const dynamic = "force-dynamic";
 
 
 export default async function Home() {
+  await ensureTelegramWebhook();
   const user = await syncUser();
 
   if (!user) {

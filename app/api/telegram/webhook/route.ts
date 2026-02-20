@@ -6,6 +6,7 @@ import { saveTransaction, getTodaySales, getPersonCredit, getWeekSummary, getSal
 import axios from "axios";
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
+const TELEGRAM_WEBHOOK_SECRET_TOKEN = process.env.TELEGRAM_WEBHOOK_SECRET_TOKEN;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_TOKEN}`;
 const HELP_MESSAGE = `Namaste! Main aapka AI accounting assistant hoon. Main aapke shop ke hisab-kitab me madad kar sakta hoon.
 
@@ -19,6 +20,13 @@ Main aapki kaise madad karu?`;
 
 export async function POST(req: NextRequest) {
     try {
+        if (TELEGRAM_WEBHOOK_SECRET_TOKEN) {
+            const secretHeader = req.headers.get("x-telegram-bot-api-secret-token");
+            if (secretHeader !== TELEGRAM_WEBHOOK_SECRET_TOKEN) {
+                return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+            }
+        }
+
         const body = await req.json();
         console.log("Telegram Webhook Body:", JSON.stringify(body, null, 2));
 
